@@ -13,6 +13,8 @@
 
 #include "io.h"
 #include "utils.h"
+#include "arm_utils.h"
+#include "prio_queue.h"
 
 #define usb_hw_set hw_set_alias(usb_hw)
 #define usb_hw_clear hw_clear_alias(usb_hw)
@@ -679,10 +681,11 @@ const uint8_t lr_buf[] = {0x00, 0x00, 0x02, 0x80, 0x80, 0x80, 0x80, 0x00,
 
 bool send_lu = true;
 
-void send_btn(void)
+void *send_btn(void *arg)
 {
     const uint8_t *p;
-    
+    (void)arg;
+
     if (send_lu) {
         p = lu_buf;
         send_lu = false;
@@ -692,20 +695,38 @@ void send_btn(void)
     }
     usb_start_transfer(usb_get_endpoint_configuration(EP1_IN_ADDR), p,
                        ARRAY_SIZE(lu_buf));
+
+    return NULL;
+}
+
+void control_loop(void)
+{
+    proc_info *proc;
+
+    if (hid_ready) {
+        proc_enqueue(send_btn, NULL, 0);
+    }
+    
+    proc = proc_next();
+    if (proc) {
+        proc->proc_fn(proc->pfn_args);
+    } else {
+        __DSB;
+        __WFI;
+    }
 }
 
 int main(void) {
     stdio_init_all();
     printf("USB Device Low-Level hardware example\n");
     usb_device_init();
+    proc_init();
 
     /* Spin until configured */
     while (!configured);
 
     while (1) {
-        if (hid_ready) {
-            send_btn();
-        }
+        control_loop();
     }
 
     return 0;
