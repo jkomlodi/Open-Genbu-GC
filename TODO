@@ -1,11 +1,5 @@
 FIRMWARE
 
-- Add priority queue system
-    - ISR handlers will add events to the queue, which the main control loop
-      will execute.
-      For now these will probably just be a uint32_t handled by a switch
-    - If nothing left to execute, main loop DSBs and WFIs.
-
 - Wire up buttons to GPIOs on pico
 
 - Add IRQ handlers for buttons
