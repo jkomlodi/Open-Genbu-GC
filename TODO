@@ -54,6 +54,12 @@ REPOSITORY
 
  - Add coding style
 
-PCB
+ - Think about a good way to separate USB so other people can use it for their
+   RP2040-based projects.
+    - Making it its own submodule seems excessive, maybe good coding is enough.
 
+PCB
+ - Avoid anything SMD if using Pico module
+    - Everything is probably going to be connector holders or the Pico module
+ 
  - WIP
