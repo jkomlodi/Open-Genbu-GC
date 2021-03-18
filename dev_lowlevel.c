@@ -217,7 +217,7 @@ void usb_setup_endpoints(void)
  * @brief Set up the USB controller in device mode, clearing any previous state.
  *
  */
-__irq_handler void usb_device_init(void)
+void usb_device_init(void)
 {
     /* Reset usb controller */
     reset_block(RESETS_RESET_USBCTRL_BITS);
@@ -626,7 +626,7 @@ static void usb_handle_buff_status() {
 /**
  * @brief USB interrupt handler
  */
-void isr_usbctrl(void) {
+__irq_handler void isr_usbctrl(void) {
     uint32_t status = usb_hw->ints;
     uint32_t handled = 0;
 
