@@ -9,6 +9,7 @@
 
 #include "usb_common.h"
 #include "utils.h"
+#include "prio_queue.h"
 
 /* Struct in which we keep the endpoint configuration */
 typedef void (*usb_ep_handler)(uint8_t *buf, uint16_t len);
@@ -150,5 +151,7 @@ static const unsigned char *descriptor_strings[] = {
         "Raspberry Pi",    /* Vendor */
         "Pico Test Device" /* Product */
 };
+
+__prio_queue void *usb_gamepad_format_and_send(void *arg);
 
 #endif

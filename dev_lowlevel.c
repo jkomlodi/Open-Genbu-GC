@@ -15,9 +15,21 @@
 #include "utils.h"
 #include "arm_utils.h"
 #include "prio_queue.h"
+#include "board_io.h"
+#include "pinmap.h"
 
 #define usb_hw_set hw_set_alias(usb_hw)
 #define usb_hw_clear hw_clear_alias(usb_hw)
+
+typedef struct {
+    uint8_t index;
+    uint8_t bit;
+} gamepad_btn;
+
+typedef struct {
+    uint8_t *buf;
+    size_t size;
+} buf_t;
 
 /*
  * TODO: Integrate this state machine with other transfers, not just HID
@@ -47,6 +59,21 @@ static bool should_set_address = false;
 static uint8_t dev_addr = 0;
 static volatile bool configured = false;
 static uint8_t ep0_buf[64];
+
+/* Global needed so EP1 CB knows if it needs to re-send packets */
+bool gamepad_held;
+
+/* TODO: Write a test that ensures this map matches the io_map mapping */
+const gamepad_btn io_gamepad_map[NUM_PINS] = {
+    {}    /* TODO: Look at your desktop notes and create the mapping */
+};
+
+const uint8_t gamepad_template[] = {
+                           0x00, 0x00, 0x00, 0x80, 0x80, 0x80, 0x80, 0x00,
+                           0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                           0x00, 0x00, 0x00, 0x00, 0x02, 0x80, 0x01, 0x00,
+                           0x02, 0x00, 0x02
+                           };
 
 static struct usb_device_configuration dev_config = {
         .device_descriptor = &device_descriptor,
@@ -190,7 +217,7 @@ void usb_setup_endpoints(void)
  * @brief Set up the USB controller in device mode, clearing any previous state.
  *
  */
-void usb_device_init(void)
+__irq_handler void usb_device_init(void)
 {
     /* Reset usb controller */
     reset_block(RESETS_RESET_USBCTRL_BITS);
@@ -329,7 +356,7 @@ void usb_handle_config_descriptor(volatile struct usb_setup_packet *pkt)
         memcpy((void *) buf, dev_config.interface_descriptor,
                sizeof(struct usb_interface_descriptor));
         buf += sizeof(struct usb_interface_descriptor);
-    
+
         /* Send HID descriptor, if it exists */
         if (dev_config.hid_descriptor) {
             /* XXX: See FIXME in HID descriptor struct definition */
@@ -339,7 +366,7 @@ void usb_handle_config_descriptor(volatile struct usb_setup_packet *pkt)
                    sizeof(*dev_config.hid_descriptor));
             buf += sizeof(*dev_config.hid_descriptor);
         }
-        
+
         /* Copy all the endpoint descriptors starting from EP1 */
         for (uint i = 2; i < USB_NUM_ENDPOINTS; i++) {
             if (ep[i].descriptor) {
@@ -433,12 +460,12 @@ static void usb_handle_report_descriptor(volatile struct usb_setup_packet *pkt)
     uint16_t sent = 0;
     const uint8_t *p_desc = hid_report_descriptor;
     uint8_t xfer_len;
-    
+
     xfer_len = 64 > pkt->wLength ? pkt->wLength : 64;
     memcpy(ep0_buf, hid_report_descriptor, xfer_len);
     usb_start_transfer(usb_get_endpoint_configuration(EP0_IN_ADDR),
                        ep0_buf, xfer_len);
-    
+
     /* Update global state so we know where we are */
     if (xfer_len == 64) {
         hid_report_sent = xfer_len;
@@ -452,8 +479,8 @@ static void usb_handle_report_descriptor(volatile struct usb_setup_packet *pkt)
 static void usb_handle_report_descriptor_cont(void)
 {
     uint8_t xfer_len;
-    
-    xfer_len = 64 > (hid_report_expected - hid_report_sent) ? 
+
+    xfer_len = 64 > (hid_report_expected - hid_report_sent) ?
                (hid_report_expected - hid_report_sent) : 64;
     memcpy(ep0_buf, &hid_report_descriptor[hid_report_sent], xfer_len);
     usb_start_transfer(usb_get_endpoint_configuration(EP0_IN_ADDR),
@@ -634,7 +661,7 @@ void isr_usbctrl(void) {
 void usb_handle_xfer(USBXferState state)
 {
     switch(state) {
-    case XFER_STATE_HID_REPORT:        
+    case XFER_STATE_HID_REPORT:
         usb_handle_report_descriptor_cont();
         break;
     }
@@ -662,39 +689,81 @@ void ep0_out_cb(uint8_t *buf, uint16_t len)
     ;
 }
 
-void ep1_in_cb(uint8_t *buf, uint16_t len)
+__prio_queue void *send_gamepad(void *buf)
 {
-    printf("Sent %d bytes to host\n", len);
-/*    // Get ready to rx again from host
-    usb_start_transfer(usb_get_endpoint_configuration(EP1_OUT_ADDR), NULL, 64);*/
+    uint8_t *usb_buf = (uint8_t *)buf;
+
+    /*
+     * XXX: Need a way to pass in size of buf, rather than assuming
+     * (correctly) that it is a gamepad buffer
+     */
+    usb_start_transfer(usb_get_endpoint_configuration(EP1_IN_ADDR), usb_buf,
+                       ARRAY_SIZE(gamepad_template));
+
+    return NULL;
 }
 
-const uint8_t lu_buf[] = {0x00, 0x00, 0x00, 0x80, 0x80, 0x80, 0x80, 0x00,
-                           0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                           0x00, 0x00, 0x00, 0x00, 0x02, 0x80, 0x01, 0x00,
-                           0x02, 0x00, 0x02};
-
-const uint8_t lr_buf[] = {0x00, 0x00, 0x02, 0x80, 0x80, 0x80, 0x80, 0x00,
-                           0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                           0x00, 0x00, 0x00, 0x00, 0x02, 0x80, 0x01, 0x00,
-                           0x02, 0x00, 0x02};
-
-bool send_lu = true;
-
-void *send_btn(void *arg)
+void ep1_in_cb(uint8_t *buf, uint16_t len)
 {
-    const uint8_t *p;
-    (void)arg;
-
-    if (send_lu) {
-        p = lu_buf;
-        send_lu = false;
-    } else {
-        p = lr_buf;
-        send_lu = true;
+    if (gamepad_held) {
+        /*
+         * This looks scary, but should be okay.
+         * buf points to USB memory, which has a global instance.
+         * This memory should not change between when this function happens and
+         * when the function added to the queue is executed, since that would
+         * mean another USB transfer would have to have happened on EP1.
+         *
+         * TODO: A more proper thing to do would to be contain buf and len in
+         * a struct that has a longer lifetime.
+         * It would have to be global, but that's ugly.
+         */
+        proc_enqueue(send_gamepad, buf, PRIORITY_LEVEL_HIGHEST);
     }
-    usb_start_transfer(usb_get_endpoint_configuration(EP1_IN_ADDR), p,
-                       ARRAY_SIZE(lu_buf));
+}
+
+__prio_queue void *usb_gamepad_format_and_send(void *arg)
+{
+    uint8_t usb_buf[ARRAY_SIZE(gamepad_template)];
+    size_t i;
+    io_map_container *ioc = (io_map_container *)arg;
+    board_io *io = ioc->io_map;
+    const gamepad_btn *btn_index;
+    bool all_high = true;
+
+    memcpy(usb_buf, gamepad_template, ARRAY_SIZE(usb_buf));
+    for (i = 0; i < ioc->size; ++i) {
+        if (io[i].state == STATE_BUTTON_PRESSED) {
+            btn_index = &io_gamepad_map[i];
+            usb_buf[btn_index->index] |= btn_index->bit;
+            all_high = false;
+        }
+    }
+
+    send_gamepad(usb_buf);
+
+    /*
+     * XXX: Maybe ugly?  I would need to revisit this.
+     * If not all of the buttons are high, we need to add another send function
+     * to the priority queue.  This is because we need to keep sending presses
+     * to tell the host that we are holding the button down.
+     *
+     * This will be handled by the EP1 callback.  An alternative would be to
+     * add a timer to the timer queue equal to the polling rate, and when that
+     * elapses, the callback for that is usb_gamepad_format_and_send.
+     * In order to communicate with ep1_cb(), we use a global telling it if we
+     * have buttons held and need to keep sending packets.
+     * Another alternative would be something that is evoked when the
+     * USB transfer complete interrupt is set.
+     *
+     * When the user releases all buttons the GPIO IRQ will update the map
+     * accordingly, meaning all buttons will be high and we stop re-sending
+     * packets.
+     */
+    if (all_high) {
+        gamepad_held = false;
+    } else {
+        gamepad_held = true;
+    }
 
     return NULL;
 }
@@ -703,16 +772,14 @@ void control_loop(void)
 {
     proc_info *proc;
 
-    if (hid_ready) {
-        proc_enqueue(send_btn, NULL, PRIORITY_LEVEL_HIGHEST);
-    }
-    
-    proc = proc_next();
-    if (proc) {
-        proc->proc_fn(proc->pfn_args);
-    } else {
-        __DSB;
-        __WFI;
+    while (1) {
+        proc = proc_next();
+        if (proc) {
+            proc->proc_fn(proc->pfn_args);
+        } else {
+            __DSB;
+            __WFI;
+        }
     }
 }
 
@@ -725,9 +792,7 @@ int main(void) {
     /* Spin until configured */
     while (!configured);
 
-    while (1) {
-        control_loop();
-    }
+    control_loop();
 
     return 0;
 }
