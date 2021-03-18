@@ -693,6 +693,7 @@ __prio_queue void *send_gamepad(void *buf)
 {
     uint8_t *usb_buf = (uint8_t *)buf;
 
+    DB_PRINT_L(3, "Starting transfer\n");
     /*
      * XXX: Need a way to pass in size of buf, rather than assuming
      * (correctly) that it is a gamepad buffer
@@ -705,6 +706,8 @@ __prio_queue void *send_gamepad(void *buf)
 
 void ep1_in_cb(uint8_t *buf, uint16_t len)
 {
+    DB_PRINT_L(3, "gamepad_held=%d\n", gamepad_held);
+
     if (gamepad_held) {
         /*
          * This looks scary, but should be okay.
@@ -729,6 +732,8 @@ __prio_queue void *usb_gamepad_format_and_send(void *arg)
     board_io *io = ioc->io_map;
     const gamepad_btn *btn_index;
     bool all_high = true;
+
+    DB_PRINT_L(3, "Formatting buffer\n");
 
     memcpy(usb_buf, gamepad_template, ARRAY_SIZE(usb_buf));
     for (i = 0; i < ioc->size; ++i) {

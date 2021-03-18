@@ -77,6 +77,9 @@ bool proc_enqueue(pfn_proc_t proc_fn, void *pfn_args, uint8_t prio)
 
     proc_inc_and_rollover(&q->tail, ARRAY_SIZE(q->pi) - 1);
 
+    DB_PRINT_L(3, "Enqueued func at 0x%x with arg at 0x%x and prio %d\n",
+               proc_fn, pfn_args, prio);
+
     return true;
 }
 
@@ -90,6 +93,8 @@ proc_info *proc_dequeue(proc_queue *q)
 
     proc_inc_and_rollover(&q->head, ARRAY_SIZE(q->pi) - 1);
 
+    DB_PRINT_L(3, "Dequeued func at 0x%x with arg at 0x%x\n",
+               node->proc_fn, node->pfn_args);
     return node;
 }
 

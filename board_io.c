@@ -43,6 +43,8 @@ io_map_container io_container = {
  */
 __prio_queue void *board_io_usb_prewrite(void *args)
 {
+    DB_PRINT_L(3, "\n");
+
     io_map_container *ioc = (io_map_container *)args;
     proc_enqueue(usb_gamepad_format_and_send, ioc,
                  PRIORITY_LEVEL_HIGHEST);
@@ -61,6 +63,8 @@ __irq_handler void board_io_irq_handler(void)
             state_changed = true;
         }
     }
+
+    DB_PRINT_L(3, "state_changed=%d\n", state_changed);
 
     if (state_changed) {
         proc_enqueue(board_io_usb_prewrite, &io_container,
