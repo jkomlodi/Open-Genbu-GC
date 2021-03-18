@@ -1,3 +1,6 @@
+#ifndef PRIO_QUEUE_H
+#define PRIO_QUEUE_H
+
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -29,3 +32,5 @@ void proc_init(void);
 bool proc_enqueue(pfn_proc_t proc_fn, void *pfn_args, uint8_t prio);
 proc_info *proc_dequeue(proc_queue *q);
 proc_info *proc_next(void);
+
+#endif
