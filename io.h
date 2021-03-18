@@ -6,7 +6,6 @@
 static inline uint32_t reg_r32(uint32_t addr)
 {
     volatile uint32_t *p = (uint32_t *)addr;
-    __DSB;
     return *p;
 }
 
@@ -19,6 +18,7 @@ static inline void reg_w32(uint32_t addr, uint32_t val)
 {
     volatile uint32_t *p = (uint32_t *)addr;
     *p = val;
+    __DSB;
 }
 
 static inline void reg_clear_bit(uint32_t addr, uint32_t bit)
