@@ -1,10 +1,12 @@
 #ifndef IO_H
 #define IO_H
 
+#include "arm_utils.h"
+
 static inline uint32_t reg_r32(uint32_t addr)
 {
     volatile uint32_t *p = (uint32_t *)addr;
-    /* TODO: DSB? ISB? */
+    __DSB;
     return *p;
 }
 
