@@ -5,6 +5,9 @@ typedef void *(*pfn_proc_t)(void *);
 typedef uint8_t prio_t;
 typedef uint32_t opcode_t;
 
+#define PRIORITY_LEVEL_HIGHEST 0
+#define PRIORITY_LEVEL_LOWEST  1
+
 #define NUM_PRIO 2
 #define MAX_QUEUE 32
 

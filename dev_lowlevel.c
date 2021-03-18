@@ -704,7 +704,7 @@ void control_loop(void)
     proc_info *proc;
 
     if (hid_ready) {
-        proc_enqueue(send_btn, NULL, 0);
+        proc_enqueue(send_btn, NULL, PRIORITY_LEVEL_HIGHEST);
     }
     
     proc = proc_next();
