@@ -788,6 +788,7 @@ int main(void) {
     printf("USB Device Low-Level hardware example\n");
     usb_device_init();
     proc_init();
+    board_io_init();
 
     /* Spin until configured */
     while (!configured);
