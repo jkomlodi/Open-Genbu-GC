@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef void *(*pfn_proc_t)(void *); 
+typedef void *(*pfn_proc_t)(void *);
 typedef uint8_t prio_t;
 typedef uint32_t opcode_t;
 
