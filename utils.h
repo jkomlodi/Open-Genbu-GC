@@ -5,6 +5,9 @@
 
 #define ERR_DEBUG 5
 
+/* To tell the user what's an IRQ handler */
+#define __irq_handler
+
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(*x))
 
 
