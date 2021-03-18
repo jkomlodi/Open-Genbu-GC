@@ -5,6 +5,9 @@ typedef void *(*pfn_proc_t)(void *);
 typedef uint8_t prio_t;
 typedef uint32_t opcode_t;
 
+/* To notify the user what functions are to be used in the queue */
+#define __prio_queue
+
 #define PRIORITY_LEVEL_HIGHEST 0
 #define PRIORITY_LEVEL_LOWEST  1
 
