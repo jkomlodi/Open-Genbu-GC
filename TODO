@@ -1,12 +1,5 @@
 FIRMWARE
 
-- Wire up buttons to GPIOs on pico
-
-- Add IRQ handlers for buttons
-    - When IRQ is fired, handler should add an event to the highest priority
-      queue.
-      The main control loop then processes this queue.
-
 - Investigate debounce
     - Either needs to be done in firmware, or microswitch has internal
       debouncing.  Probably the former.
