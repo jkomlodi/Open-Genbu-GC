@@ -15,6 +15,7 @@
 
 #define BTN_START 11
 
-#define NUM_PINS 11
+#define NUM_BTN 7
+#define NUM_DPAD 4
 
 #endif

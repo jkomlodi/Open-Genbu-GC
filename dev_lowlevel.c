@@ -22,8 +22,9 @@
 #define usb_hw_clear hw_clear_alias(usb_hw)
 
 typedef struct {
-    uint8_t index;
-    uint8_t bit;
+    uint8_t indeces[4];
+    uint8_t bits[4];
+    size_t num;
 } gamepad_btn;
 
 typedef struct {
@@ -38,14 +39,18 @@ typedef struct {
  */
 typedef enum {
     XFER_STATE_DONE = 0x00,
-    XFER_STATE_HID_REPORT = 0x01
+    XFER_STATE_DEVICE_DESCR = 0x01,
+    XFER_STATE_INTERFACE_DESCR = 0x02,
+    XFER_STATE_CONFIG_DESCR = 0x03,
+    XFER_STATE_ENDPOINT_DESCR = 0x04,
+    XFER_STATE_HID_REPORT = 0x05
 } USBXferState;
 
 static USBXferState usb_xfer_state = XFER_STATE_DONE;
 
 /* XXX: HID report variables */
-size_t hid_report_sent;
-size_t hid_report_expected;
+size_t descr_sent;
+size_t descr_expected;
 /* Different from configured in USB terminology */
 static bool hid_ready = false;
 
@@ -53,6 +58,7 @@ static bool hid_ready = false;
 void ep0_in_cb(uint8_t *buf, uint16_t len);
 void ep0_out_cb(uint8_t *buf, uint16_t len);
 void ep1_in_cb(uint8_t *buf, uint16_t len);
+void ep2_out_cb(uint8_t *buf, uint16_t len);
 
 /* USB Globals */
 static bool should_set_address = false;
@@ -64,13 +70,27 @@ static uint8_t ep0_buf[64];
 bool gamepad_held;
 
 /* TODO: Write a test that ensures this map matches the io_map mapping */
-const gamepad_btn io_gamepad_map[NUM_PINS] = {
-    {}    /* TODO: Look at your desktop notes and create the mapping */
+/* Stolen from Genbu */
+const gamepad_btn io_btn_map[NUM_BTN] = {
+    { .indeces = {0},     .bits = {0x01}, .num = 1 }, /* RU */
+    { .indeces = {0},     .bits = {0x02}, .num = 1 }, /* RR */
+    { .indeces = {0},     .bits = {0x04}, .num = 1 }, /* RD */
+    { .indeces = {0},     .bits = {0x08}, .num = 1 }, /* RL */
+    { .indeces = {0},     .bits = {0x20}, .num = 1 }, /* RPRESS */
+    { .indeces = {0, 15}, .bits = {0x10, 0xff}, .num = 2 }, /* LPRESS */
+    { .indeces = {1},     .bits = {0x01}, .num = 1 }  /* START */
+};
+
+const gamepad_btn io_dpad_map[NUM_DPAD] = {
+    { .indeces = {2, 9},     .bits = {0x08, 0xff}, .num = 2 }, /* LU */
+    { .indeces = {2, 7},     .bits = {0x02, 0xff}, .num = 2 }, /* LR */
+    { .indeces = {2, 10},    .bits = {0x04, 0xff}, .num = 2 }, /* LD */
+    { .indeces = {2, 8},     .bits = {0x06, 0xff}, .num = 2 } /* LL */
 };
 
 const uint8_t gamepad_template[] = {
-                           0x00, 0x00, 0x00, 0x80, 0x80, 0x80, 0x80, 0x00,
-                           0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                           0x00, 0x00, 0x08, 0x80, 0x80, 0x80, 0x80, 0x00,
+                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                            0x00, 0x00, 0x00, 0x00, 0x02, 0x80, 0x01, 0x00,
                            0x02, 0x00, 0x02
                            };
@@ -106,6 +126,14 @@ static struct usb_device_configuration dev_config = {
                         .buffer_control = &usb_dpram->ep_buf_ctrl[1].in,
                         /* First free EPx buffer */
                         .data_buffer = &usb_dpram->epx_data[0 * 64],
+                },
+                {
+                        .descriptor = &ep2_out,
+                        .handler = &ep2_out_cb,
+                        .endpoint_control = &usb_dpram->ep_ctrl[1].out,
+                        .buffer_control = &usb_dpram->ep_buf_ctrl[2].out,
+                        /* Second free EPx buffer */
+                        .data_buffer = &usb_dpram->epx_data[1 * 64],
                 }
         }
 };
@@ -184,7 +212,7 @@ static inline uint32_t usb_buffer_offset(volatile uint8_t *buf)
  */
 void usb_setup_endpoint(const struct usb_endpoint_configuration *ep)
 {
-    printf("Set up endpoint 0x%x with buffer address 0x%p\n",
+    DB_PRINT_L(2, "Set up endpoint 0x%x with buffer address 0x%p\n",
            ep->descriptor->bEndpointAddress, ep->data_buffer);
 
     if (!ep->endpoint_control) {
@@ -290,8 +318,11 @@ void usb_start_transfer(struct usb_endpoint_configuration *ep, uint8_t *buf,
      */
     assert(len <= 64);
 
-    printf("Start transfer of len %d on ep addr 0x%x\n",
-           len, ep->descriptor->bEndpointAddress);
+    DB_PRINT_L(3, "Starting transfer\n");
+    for (size_t i = 0; i < len; ++i) {
+        DB_PRINT(4, "%.2x%c", buf[i], (!(i % 0x08) && i > 0) ? '\n' : ' ');
+    }
+    DB_PRINT(4, "\n");
 
     /* Prepare buffer control register value */
     uint32_t val = len | USB_BUF_CTRL_AVAIL;
@@ -313,14 +344,47 @@ void usb_start_transfer(struct usb_endpoint_configuration *ep, uint8_t *buf,
 /**
  * @brief Send device descriptor to host
  */
-void usb_handle_device_descriptor(void)
+void usb_handle_device_descriptor(volatile struct usb_setup_packet *pkt)
 {
-    const struct usb_device_descriptor *d = dev_config.device_descriptor;
+    size_t xfer_len;
+    uint8_t *d = (uint8_t *) dev_config.device_descriptor;
     struct usb_endpoint_configuration *ep;
     ep = usb_get_endpoint_configuration(EP0_IN_ADDR);
 
+    xfer_len = pkt->wLength <= sizeof(*dev_config.device_descriptor) ?
+                               pkt->wLength :
+                               sizeof(*dev_config.device_descriptor);
+
+    /*
+     * The host requested less length than the device descriptor size, we need
+     * to deal with handling state now for the next transfer.
+     *
+     * Windows and Linux don't do this, but the Switch requests 8-byte packets
+     * because either NVIDIA or Nintendo have to be a pain in the ass.
+     */
+    if (pkt->wLength + descr_sent < sizeof(*dev_config.device_descriptor)) {
+//        usb_xfer_state = XFER_STATE_DEVICE_DESCR;
+        descr_sent += pkt->wLength;
+        descr_expected = sizeof(*dev_config.device_descriptor);
+    } else {
+        /* Otherwise we're done, reset state */
+        usb_xfer_state = XFER_STATE_DONE;
+        descr_sent = 0;
+    }
+
     ep->next_pid = 1;
-    usb_start_transfer(ep, (uint8_t *) d, sizeof(struct usb_device_descriptor));
+    usb_start_transfer(ep, d, xfer_len);
+}
+
+void usb_handle_device_descriptor_cont(void)
+{
+    uint8_t *d = (uint8_t *)dev_config.device_descriptor;
+    size_t xfer_len;
+
+    xfer_len = descr_expected - descr_sent;
+    memcpy(ep0_buf, &hid_report_descriptor[descr_sent], xfer_len);
+    usb_start_transfer(usb_get_endpoint_configuration(EP0_IN_ADDR),
+                       &d[descr_sent], xfer_len);
 }
 
 void usb_transfer_blocking(struct usb_endpoint_configuration *ep, uint8_t *buf,
@@ -434,7 +498,7 @@ void usb_set_device_address(volatile struct usb_setup_packet *pkt)
      * status packet first with address 0
      */
     dev_addr = (pkt->wValue & 0xff);
-    printf("Set address %d\r\n", dev_addr);
+    DB_PRINT_L(2, "Set address %d\r\n", dev_addr);
     /* Will set address in the callback phase */
     should_set_address = true;
     usb_start_transfer(usb_get_endpoint_configuration(EP0_IN_ADDR), NULL, 0);
@@ -450,7 +514,7 @@ void usb_set_device_address(volatile struct usb_setup_packet *pkt)
 void usb_set_device_configuration(volatile struct usb_setup_packet *pkt)
 {
     /* Only one configuration so just acknowledge the request */
-    printf("Device Enumerated\r\n");
+    DB_PRINT_L(1, "Device Enumerated\r\n");
     usb_start_transfer(usb_get_endpoint_configuration(EP0_IN_ADDR), NULL, 0);
     configured = true;
 }
@@ -468,8 +532,9 @@ static void usb_handle_report_descriptor(volatile struct usb_setup_packet *pkt)
 
     /* Update global state so we know where we are */
     if (xfer_len == 64) {
-        hid_report_sent = xfer_len;
-        hid_report_expected = pkt->wLength;
+        descr_sent = xfer_len;
+        descr_expected = pkt->wLength > ARRAY_SIZE(genbu_report_desc) ?
+                         ARRAY_SIZE(genbu_report_desc) : pkt->wLength;
         usb_xfer_state = XFER_STATE_HID_REPORT;
     } else {
         usb_xfer_state = XFER_STATE_DONE;
@@ -480,19 +545,39 @@ static void usb_handle_report_descriptor_cont(void)
 {
     uint8_t xfer_len;
 
-    xfer_len = 64 > (hid_report_expected - hid_report_sent) ?
-               (hid_report_expected - hid_report_sent) : 64;
-    memcpy(ep0_buf, &hid_report_descriptor[hid_report_sent], xfer_len);
+    xfer_len = 64 > (descr_expected - descr_sent) ?
+               (descr_expected - descr_sent) : 64;
+    memcpy(ep0_buf, &hid_report_descriptor[descr_sent], xfer_len);
     usb_start_transfer(usb_get_endpoint_configuration(EP0_IN_ADDR),
                        ep0_buf, xfer_len);
 
     /* update state */
     if (xfer_len == 64) {
-        hid_report_sent += xfer_len;
+        descr_sent += xfer_len;
     } else {
         usb_xfer_state = XFER_STATE_DONE;
         hid_ready = true;
     }
+}
+
+static void usb_handle_get_status(volatile struct usb_setup_packet *pkt)
+{
+    uint8_t status[2] = {0};
+    uint8_t attrs = dev_config.config_descriptor->bmAttributes;
+    if (attrs & 0x40) {
+        status[0] |= 0x01;
+    }
+    if (attrs & 0x01) {
+        status[0] |= 0x02;
+    }
+
+    usb_start_transfer(usb_get_endpoint_configuration(pkt->wIndex),
+                       status, 2);
+}
+
+static void usb_handle_clear_feature(volatile struct usb_setup_packet *pkt)
+{
+    usb_start_transfer(usb_get_endpoint_configuration(EP0_IN_ADDR), NULL, 0);
 }
 
 /**
@@ -501,6 +586,11 @@ static void usb_handle_report_descriptor_cont(void)
 void usb_handle_setup_packet(void) {
     volatile struct usb_setup_packet *pkt = (volatile struct usb_setup_packet *)
                                             &usb_dpram->setup_packet;
+
+    /*
+     * TODO: The RPi foundation did not write this out correctly.
+     * bmRequestType is a bitfield, and they omitted a lot of bRequest
+     */
     uint8_t req_direction = pkt->bmRequestType;
     uint8_t req = pkt->bRequest;
     uint16_t descriptor_type;
@@ -523,7 +613,7 @@ void usb_handle_setup_packet(void) {
         } else if (req == USB_REQUEST_SET_CONFIGURATION) {
             usb_set_device_configuration(pkt);
         } else {
-            printf("Other OUT request (0x%x)\r\n", pkt->bRequest);
+            DB_PRINT_L(1, "Other OUT request (0x%x)\r\n", pkt->bRequest);
         }
     } else if (req_direction == USB_DIR_IN) {
         if (req == USB_REQUEST_GET_DESCRIPTOR) {
@@ -531,37 +621,47 @@ void usb_handle_setup_packet(void) {
 
             switch (descriptor_type) {
                 case USB_DT_DEVICE:
-                    usb_handle_device_descriptor();
-                    printf("GET DEVICE DESCRIPTOR\r\n");
+                    usb_handle_device_descriptor(pkt);
+                    DB_PRINT_L(1, "GET DEVICE DESCRIPTOR\r\n");
                     break;
 
                 case USB_DT_CONFIG:
                     usb_handle_config_descriptor(pkt);
-                    printf("GET CONFIG DESCRIPTOR\r\n");
+                    DB_PRINT_L(1, "GET CONFIG DESCRIPTOR\r\n");
                     break;
 
                 case USB_DT_STRING:
                     usb_handle_string_descriptor(pkt);
-                    printf("GET STRING DESCRIPTOR\r\n");
+                    DB_PRINT_L(1, "GET STRING DESCRIPTOR\r\n");
                     break;
 
                 default:
-                    printf("Unhandled GET_DESCRIPTOR type 0x%x\r\n", descriptor_type);
+                    DB_PRINT_L(1, "Unhandled GET_DESCRIPTOR type 0x%x\r\n", descriptor_type);
             }
         } else {
-            printf("Other IN request (0x%x)\r\n", pkt->bRequest);
+            DB_PRINT_L(1, "Other IN request (0x%x)\r\n", pkt->bRequest);
         }
     /* XXX: HID IN setup request, not sure what to call this variable */
     } else if (req_direction == USB_DIR_EP_IN) {
         descriptor_type = pkt->wValue >> 8;
         switch (descriptor_type) {
         case USB_HID_DESCRIPTOR_REPORT:
-            printf("GET REPORT DESCRIPTOR\r\n");
+            DB_PRINT_L(1, "GET REPORT DESCRIPTOR\r\n");
             usb_handle_report_descriptor(pkt);
             break;
 
         default:
-            printf("Unhandled hid GET_DESCRIPTOR type 0x%x\r\n", descriptor_type);
+            DB_PRINT_L(1, "Unhandled hid GET_DESCRIPTOR type 0x%x\r\n", descriptor_type);
+        }
+    } else if (pkt->bmRequestType == 0x02) {
+        switch (req) {
+        case USB_REQUEST_GET_STATUS:
+            usb_handle_get_status(pkt);
+            break;
+        case USB_REQUEST_CLEAR_FEATURE:
+            usb_handle_clear_feature(pkt);
+            break;
+
         }
     }
 }
@@ -589,7 +689,7 @@ static void usb_handle_ep_buff_done(struct usb_endpoint_configuration *ep)
 static void usb_handle_buff_done(uint ep_num, bool in)
 {
     uint8_t ep_addr = ep_num | (in ? USB_DIR_IN : 0);
-    printf("EP %d (in = %d) done\n", ep_num, in);
+    DB_PRINT_L(3, "EP %d (in = %d) done\n", ep_num, in);
     for (uint i = 0; i < USB_NUM_ENDPOINTS; i++) {
         struct usb_endpoint_configuration *ep = &dev_config.endpoints[i];
         if (ep->descriptor && ep->handler) {
@@ -647,7 +747,7 @@ __irq_handler void isr_usbctrl(void) {
 
     /* Bus is reset */
     if (status & USB_INTS_BUS_RESET_BITS) {
-        printf("BUS RESET\n");
+        DB_PRINT_L(1, "BUS RESET\n");
         handled |= USB_INTS_BUS_RESET_BITS;
         usb_hw_clear->sie_status = USB_SIE_STATUS_BUS_RESET_BITS;
         usb_bus_reset();
@@ -664,6 +764,9 @@ void usb_handle_xfer(USBXferState state)
     case XFER_STATE_HID_REPORT:
         usb_handle_report_descriptor_cont();
         break;
+    /*case XFER_STATE_DEVICE_DESCR:
+        usb_handle_device_descriptor_cont();
+        break;*/
     }
 }
 
@@ -676,6 +779,8 @@ void ep0_in_cb(uint8_t *buf, uint16_t len)
     } else {
         if (usb_xfer_state != XFER_STATE_DONE) {
             usb_handle_xfer(usb_xfer_state);
+            /*usb_start_transfer(usb_get_endpoint_configuration(EP0_OUT_ADDR),
+                               NULL, 0);*/
         } else {
             /* Receive a zero length status packet from the host on EP0 OUT */
             usb_start_transfer(usb_get_endpoint_configuration(EP0_OUT_ADDR),
@@ -694,6 +799,10 @@ __prio_queue void *send_gamepad(void *buf)
     uint8_t *usb_buf = (uint8_t *)buf;
 
     DB_PRINT_L(3, "Starting transfer\n");
+    for (size_t i = 0; i < ARRAY_SIZE(gamepad_template); ++i) {
+        DB_PRINT(4, "%.2x%c", usb_buf[i], (!(i % 0x08) && i > 0) ? '\n' : ' ');
+    }
+    DB_PRINT(4, "\n");
     /*
      * XXX: Need a way to pass in size of buf, rather than assuming
      * (correctly) that it is a gamepad buffer
@@ -724,25 +833,96 @@ void ep1_in_cb(uint8_t *buf, uint16_t len)
     }
 }
 
+void ep2_out_cb(uint8_t *buf, uint16_t len)
+{
+    DB_PRINT_L(3, "EP2 RX:\n");
+    for (size_t i = 0; i < len; ++i) {
+        DB_PRINT(3, "%.2x%c", buf[i], (!(i % 0x08) && i > 0) ? '\n' : ' ');
+    }
+    /* Ignore the host on this EP */
+}
+
+void usb_btn_map_to_buf(const gamepad_btn *map, size_t index, uint8_t *buf)
+{
+    size_t i;
+    const gamepad_btn *btn = &map[index];
+
+    for (i = 0; i < btn->num; ++i) {
+        buf[btn->indeces[i]] ^= btn->bits[i];
+    }
+}
+
+bool usb_dpad_map_to_buf(const gamepad_btn *usb_map,
+                         const io_map_container *ioc, uint8_t *usb_buf)
+{
+    size_t i, j;
+    const board_io *io_map = ioc->dpad_map;
+    uint8_t press_cnt = 0;
+    uint8_t dpad_val = 0;
+    const gamepad_btn *btn;
+
+    /*
+     * D-pad input needs special handling on byte 2.
+     * U D L R each have an even number assigned  to them, and that number is
+     * added, averaged, and put in the buffer.
+     *
+     * XXX: In the case where the d-pad value is 8, we set the buffer to 0
+     * (0x08 ^ 0x08), unless there's another value, then it's averaged like any
+     * other value, but it's an 8 instead of 0.
+     * We do this in a clunky way, and there should be an obvious better way
+     * to do this, because this edge case would be weird to write in RTL.
+     *
+     * If there are multiple inputs, we add the inputs and then divide by the
+     * number of inputs.
+     * This might break on combinations such as LR, UD, and 3-4 button combos,
+     * but this can't happen in normal situations.
+     *
+     * Along with this, there's an FF byte set at a set location in the USB
+     * buffer.
+     */
+    for (i = 0; i < ioc->dpad_size; ++i) {
+        if (io_map[i].state == STATE_BUTTON_PRESSED) {
+            ++press_cnt;
+            btn = &usb_map[i];
+            dpad_val += btn->bits[0];
+
+            /* Now do the FF byte(s) */
+            for (j = 1; j < btn->num; ++j) {
+                usb_buf[btn->indeces[j]] ^= btn->bits[j];
+            }
+        }
+    }
+
+    /* Now add the d-pad input */
+    /* XXX: See above 8-case */
+    if (press_cnt == 1) {
+        usb_buf[btn->indeces[0]] = dpad_val == 0x08 ? 0 : dpad_val;
+    } else if (press_cnt > 1) {
+        dpad_val /= press_cnt;
+        usb_buf[btn->indeces[0]] = dpad_val;
+    }
+
+    return !!press_cnt;
+}
+
 __prio_queue void *usb_gamepad_format_and_send(void *arg)
 {
     uint8_t usb_buf[ARRAY_SIZE(gamepad_template)];
     size_t i;
     io_map_container *ioc = (io_map_container *)arg;
-    board_io *io = ioc->io_map;
-    const gamepad_btn *btn_index;
+    board_io *io = ioc->btn_map;
     bool all_high = true;
 
     DB_PRINT_L(3, "Formatting buffer\n");
 
     memcpy(usb_buf, gamepad_template, ARRAY_SIZE(usb_buf));
-    for (i = 0; i < ioc->size; ++i) {
+    for (i = 0; i < ioc->btn_size; ++i) {
         if (io[i].state == STATE_BUTTON_PRESSED) {
-            btn_index = &io_gamepad_map[i];
-            usb_buf[btn_index->index] |= btn_index->bit;
+            usb_btn_map_to_buf(io_btn_map, i, usb_buf);
             all_high = false;
         }
     }
+    all_high = !usb_dpad_map_to_buf(io_dpad_map, ioc, usb_buf);
 
     send_gamepad(usb_buf);
 
@@ -790,7 +970,6 @@ void control_loop(void)
 
 int main(void) {
     stdio_init_all();
-    printf("USB Device Low-Level hardware example\n");
     usb_device_init();
     proc_init();
     board_io_init();

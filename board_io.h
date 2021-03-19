@@ -11,8 +11,15 @@ typedef struct {
 } board_io;
 
 typedef struct {
-    board_io *io_map;
-    size_t size;
+    /*
+     * TODO: If we're clever about this, we can simplify some GPIO iterating
+     * code by combining the button and d-pad maps and being able to iterate
+     * over that combined map, and access the separate ones when needed.
+     */
+    board_io *btn_map;
+    size_t btn_size;
+    board_io *dpad_map;
+    size_t dpad_size;
 } io_map_container;
 
 void *board_io_usb_prewrite(void *args);

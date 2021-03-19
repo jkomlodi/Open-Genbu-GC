@@ -3,7 +3,7 @@
 
 #include <assert.h>
 
-#define ERR_DEBUG 5
+#define ERR_DEBUG 0
 
 /* To tell the user what's an IRQ handler */
 #define __irq_handler
@@ -14,6 +14,12 @@
 #define DB_PRINT_L(level, ...) do { \
         if (ERR_DEBUG > (level)) { \
                     printf(": %s: ", __func__); \
+                    printf(__VA_ARGS__); \
+                } \
+} while (0)
+
+#define DB_PRINT(level, ...) do { \
+        if (ERR_DEBUG > (level)) { \
                     printf(__VA_ARGS__); \
                 } \
 } while (0)

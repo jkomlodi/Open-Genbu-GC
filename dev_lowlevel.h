@@ -60,6 +60,7 @@ static const uint8_t *hid_report_descriptor = genbu_report_desc;
 #define EP0_IN_ADDR  (USB_DIR_IN  | 0)
 #define EP0_OUT_ADDR (USB_DIR_OUT | 0)
 #define EP1_IN_ADDR  (USB_DIR_IN | 1)
+#define EP2_OUT_ADDR  (USB_DIR_OUT | 2)
 
 static const struct usb_endpoint_descriptor ep0_out = {
         .bLength          = sizeof(struct usb_endpoint_descriptor),
@@ -87,9 +88,9 @@ static const struct usb_device_descriptor device_descriptor = {
         .bDeviceSubClass = 0,      /* No subclass */
         .bDeviceProtocol = 0,      /* No protocol */
         .bMaxPacketSize0 = 64,     /* Max packet size for ep0 */
-        .idVendor        = 0xd00d, /* Your vendor id */
-        .idProduct       = 0x0001, /* Your product ID */
-        .bcdDevice       = 0,      /* No device revision number */
+        .idVendor        = 0x0f0d, /* Your vendor id */
+        .idProduct       = 0x0092, /* Your product ID */
+        .bcdDevice       = 0x000,      /* No device revision number */
         .iManufacturer   = 1,      /* Manufacturer string index */
         .iProduct        = 2,      /* Product string index */
         .iSerialNumber = 0,        /* No serial number */
@@ -101,7 +102,7 @@ static const struct usb_interface_descriptor interface_descriptor = {
         .bDescriptorType    = USB_DT_INTERFACE,
         .bInterfaceNumber   = 0,
         .bAlternateSetting  = 0,
-        .bNumEndpoints      = 1,
+        .bNumEndpoints      = 2,
         .bInterfaceClass    = USB_INTERFACE_CLASS_HID,
         .bInterfaceSubClass = 0,
         .bInterfaceProtocol = USB_INTERFACE_PROTOCOL_HID_NONE,
@@ -124,7 +125,16 @@ static const struct usb_endpoint_descriptor ep1_in = {
         .bEndpointAddress = EP1_IN_ADDR,
         .bmAttributes     = USB_TRANSFER_TYPE_INTERRUPT,
         .wMaxPacketSize   = 64,
-        .bInterval        = 1
+        .bInterval        = 5
+};
+
+static const struct usb_endpoint_descriptor ep2_out = {
+        .bLength          = sizeof(struct usb_endpoint_descriptor),
+        .bDescriptorType  = USB_DT_ENDPOINT,
+        .bEndpointAddress = EP2_OUT_ADDR,
+        .bmAttributes     = USB_TRANSFER_TYPE_INTERRUPT,
+        .wMaxPacketSize   = 64,
+        .bInterval        = 5
 };
 
 static const struct usb_configuration_descriptor config_descriptor = {
@@ -132,13 +142,14 @@ static const struct usb_configuration_descriptor config_descriptor = {
         .bDescriptorType = USB_DT_CONFIG,
         .wTotalLength    = (sizeof(config_descriptor) +
                             sizeof(interface_descriptor) +
-                            sizeof(ep1_in)) +
-                            sizeof(hid_descriptor),
+                            sizeof(ep1_in) +
+                            sizeof(ep2_out) +
+                            sizeof(hid_descriptor)),
         .bNumInterfaces  = 1,
         .bConfigurationValue = 1, /* Configuration 1 */
         .iConfiguration = 0,      /* No string */
-        .bmAttributes = 0xc0,     /* attributes: self powered, no remote wakeup */
-        .bMaxPower = 0x32         /* 100ma */
+        .bmAttributes = 0x80,     /* attributes: self powered, no remote wakeup */
+        .bMaxPower = 0xfa         /* 500ma */
 };
 
 static const unsigned char lang_descriptor[] = {

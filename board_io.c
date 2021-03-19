@@ -14,24 +14,29 @@
 #include "dev_lowlevel.h"
 #include "board_io.h"
 
-board_io io_map[NUM_PINS] = {
+board_io btn_map[NUM_BTN] = {
     { .gpio = BOOSTER_R_U },
     { .gpio = BOOSTER_R_R },
     { .gpio = BOOSTER_R_D },
     { .gpio = BOOSTER_R_L },
     { .gpio = BOOSTER_R_PRESS },
-    { .gpio = BOOSTER_L_U },
-    { .gpio = BOOSTER_L_R },
-    { .gpio = BOOSTER_L_D },
-    { .gpio = BOOSTER_L_L },
     { .gpio = BOOSTER_L_PRESS },
     { .gpio = BTN_START }
 };
 
-/* When passing io_map around, we need to be aware of its size as well */
+board_io dpad_map[NUM_DPAD] = {
+    { .gpio = BOOSTER_L_U },
+    { .gpio = BOOSTER_L_R },
+    { .gpio = BOOSTER_L_D },
+    { .gpio = BOOSTER_L_L }
+};
+
+/* When passing maps around, we need to be aware of their size as well */
 io_map_container io_container = {
-    .io_map = io_map,
-    .size = ARRAY_SIZE(io_map)
+    .btn_map = btn_map,
+    .btn_size = ARRAY_SIZE(btn_map),
+    .dpad_map = dpad_map,
+    .dpad_size = ARRAY_SIZE(dpad_map)
 };
 
 /*
@@ -56,10 +61,22 @@ __irq_handler void board_io_irq_handler(void)
     bool state_changed = false;
     bool new_state;
 
-    for (i = 0; i < ARRAY_SIZE(io_map); ++i) {
-        new_state = gpio_get(io_map[i].gpio);
-        if (io_map[i].state != new_state) {
-            io_map[i].state = new_state;
+    for (i = 0; i < ARRAY_SIZE(btn_map); ++i) {
+        new_state = gpio_get(btn_map[i].gpio);
+        gpio_acknowledge_irq(btn_map[i].gpio,
+                             GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL);
+        if (btn_map[i].state != new_state) {
+            btn_map[i].state = new_state;
+            state_changed = true;
+        }
+    }
+
+    for (i = 0; i < ARRAY_SIZE(dpad_map); ++i) {
+        new_state = gpio_get(dpad_map[i].gpio);
+        gpio_acknowledge_irq(dpad_map[i].gpio,
+                             GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL);
+        if (dpad_map[i].state != new_state) {
+            dpad_map[i].state = new_state;
             state_changed = true;
         }
     }
@@ -76,9 +93,16 @@ static void io_map_init(void)
 {
     size_t i;
 
-    for (i = 0; i < ARRAY_SIZE(io_map); ++i) {
-        gpio_set_input_enabled(io_map[i].gpio, true);
-        io_map[i].state = gpio_get(io_map[i].gpio);
+    for (i = 0; i < ARRAY_SIZE(btn_map); ++i) {
+        gpio_set_input_enabled(btn_map[i].gpio, true);
+        gpio_set_pulls(btn_map[i].gpio, true, false);
+        btn_map[i].state = gpio_get(btn_map[i].gpio);
+    }
+
+    for (i = 0; i < ARRAY_SIZE(dpad_map); ++i) {
+        gpio_set_input_enabled(dpad_map[i].gpio, true);
+        gpio_set_pulls(dpad_map[i].gpio, true, false);
+        dpad_map[i].state = gpio_get(dpad_map[i].gpio);
     }
 }
 
@@ -92,12 +116,22 @@ static void isr_init(void)
                                  &iobank0_hw->proc1_irq_ctrl :
                                  &iobank0_hw->proc0_irq_ctrl;
 
-    for (i = 0; i < io_container.size; ++i) {
-        gpio_acknowledge_irq(io_container.io_map[i].gpio, events);
+    for (i = 0; i < io_container.btn_size; ++i) {
+        gpio_set_irq_enabled(io_container.btn_map[i].gpio, events, true);
+        /*gpio_acknowledge_irq(io_container.io_map[i].gpio, events);
         ien = irq_base->inte[io_container.io_map[i].gpio / 8];
         events <<= 4 * (io_container.io_map[i].gpio % 8);
 
-        reg_set_bit(ien, events);
+        reg_set_bit(ien, events);*/
+    }
+
+    for (i = 0; i < io_container.dpad_size; ++i) {
+        gpio_set_irq_enabled(io_container.dpad_map[i].gpio, events, true);
+        /*gpio_acknowledge_irq(io_container.io_map[i].gpio, events);
+        ien = irq_base->inte[io_container.io_map[i].gpio / 8];
+        events <<= 4 * (io_container.io_map[i].gpio % 8);
+
+        reg_set_bit(ien, events);*/
     }
     irq_set_exclusive_handler(IO_IRQ_BANK0, board_io_irq_handler);
     irq_set_enabled(IO_IRQ_BANK0, true);
