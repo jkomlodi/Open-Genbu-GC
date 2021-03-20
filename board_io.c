@@ -41,13 +41,6 @@ io_map_container io_container = {
     .dpad_size = ARRAY_SIZE(dpad_map)
 };
 
-/*
- * Anything to be done before we send the data should be handled here, such as
- * starting a timer for each button that was pressed for debounce handling.
- * TODO: It might be wise to disable interrupts on the GPIOs that will be
- * bouncing.  Then when the timer elapses, that callback re-enables the
- * interrupt on the bouncing GPIO.
- */
 __prio_queue void *board_io_usb_prewrite(void *args)
 {
     DB_PRINT_L(3, "\n");
@@ -63,8 +56,6 @@ __irq_handler void board_io_irq_handler(void)
     size_t i;
     bool state_changed = false;
     bool new_state;
-
-    __DISABLE_IRQ;
 
     for (i = 0; i < ARRAY_SIZE(btn_map); ++i) {
         new_state = gpio_get(btn_map[i].gpio);
@@ -92,8 +83,6 @@ __irq_handler void board_io_irq_handler(void)
         proc_enqueue(board_io_usb_prewrite, &io_container,
                      PRIORITY_LEVEL_HIGHEST);
     }
-
-    __ENABLE_IRQ;
 }
 
 static void io_map_init(void)
