@@ -67,5 +67,6 @@ void usb_bus_reset(void);
 void ep0_in_cb(uint8_t *buf, uint16_t len);
 void ep0_out_cb(uint8_t *buf, uint16_t len);
 bool usb_is_configured(void);
+bool usb_ep_add_callback(uint8_t ep_addr, usb_ep_handler cb);
 
 #endif

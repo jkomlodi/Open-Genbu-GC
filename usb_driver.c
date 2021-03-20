@@ -18,11 +18,6 @@
 #include "pinmap.h"
 #include "descriptors.h"
 #include "usb_driver.h"
-#include "usb_gamepad.h" /* XXX: Needed for ep1_cb, instead we should
-                            make a function that takes it in as an argument
-                            and we add it so we don't need to include the
-                            gamepad header
-                           */
 
 static USBXferState usb_xfer_state = XFER_STATE_DONE;
 
@@ -68,7 +63,6 @@ static struct usb_device_configuration dev_config = {
                 },
                 {
                         .descriptor = &ep1_in,
-                        .handler = &ep1_in_cb,
                         .endpoint_control = &usb_dpram->ep_ctrl[0].in,
                         .buffer_control = &usb_dpram->ep_buf_ctrl[1].in,
                         /* First free EPx buffer */
@@ -76,7 +70,6 @@ static struct usb_device_configuration dev_config = {
                 },
                 {
                         .descriptor = &ep2_out,
-                        .handler = &ep2_out_cb,
                         .endpoint_control = &usb_dpram->ep_ctrl[1].out,
                         .buffer_control = &usb_dpram->ep_buf_ctrl[2].out,
                         /* Second free EPx buffer */
@@ -713,4 +706,24 @@ void ep0_out_cb(uint8_t *buf, uint16_t len)
 bool usb_is_configured(void)
 {
     return configured;
+}
+
+/*
+ * Modify EP0 callbacks at your own risk!
+ * ep_addr should have bit 7 set if they're IN EPs
+ */
+bool usb_ep_add_callback(uint8_t ep_addr, usb_ep_handler cb)
+{
+    size_t i;
+    bool found = false;
+
+    for (i = 0; i < ARRAY_SIZE(dev_config.endpoints); ++i) {
+        if (dev_config.endpoints[i].descriptor->bEndpointAddress == ep_addr) {
+            dev_config.endpoints[i].handler = cb;
+            found = true;
+            break;
+        }
+    }
+
+    return found;
 }

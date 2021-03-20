@@ -4,9 +4,6 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#ifndef DEV_LOWLEVEL_H_
-#define DEV_LOWLEVEL_H_
-
 #include "usb_common.h"
 #include "utils.h"
 #include "proc_queue.h"
@@ -133,5 +130,3 @@ const unsigned char *descriptor_strings[] = {
         "Raspberry Pi",    /* Vendor */
         "Pico Test Device" /* Product */
 };
-
-#endif
