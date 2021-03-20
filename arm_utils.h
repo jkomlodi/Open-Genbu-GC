@@ -17,4 +17,12 @@
     asm volatile ("wfe"); \
 } while(0)
 
+#define __DISABLE_IRQ do {    \
+    asm volatile ("cpsid i"); \
+} while (0)
+
+#define __ENABLE_IRQ do {     \
+    asm volatile ("cpsie i"); \
+} while (0)
+
 #endif

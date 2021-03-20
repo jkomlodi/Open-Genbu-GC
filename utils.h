@@ -33,9 +33,9 @@
  * We have memory to spare, so print the function that would have asserted.
  */
 #define DBG_ASSERT(x) do {                        \
-    if (ERR_DEBUG) {                              \
+    if (ERR_DEBUG > 1) {                          \
         assert(x);                                \
-    } else {                                      \
+    } else if(x) {                                \
         printf("%s: ASSERT REACHED\n", __func__); \
     }                                             \
 } while (0)

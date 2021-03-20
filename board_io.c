@@ -10,9 +10,11 @@
 #include "prio_queue.h"
 #include "pinmap.h"
 #include "utils.h"
+#include "arm_utils.h"
 #include "io.h"
 #include "dev_lowlevel.h"
 #include "board_io.h"
+#include "debounce.h"
 
 board_io btn_map[NUM_BTN] = {
     { .gpio = BOOSTER_R_U },
@@ -51,6 +53,7 @@ __prio_queue void *board_io_usb_prewrite(void *args)
     DB_PRINT_L(3, "\n");
 
     io_map_container *ioc = (io_map_container *)args;
+
     proc_enqueue(usb_gamepad_format_and_send, ioc,
                  PRIORITY_LEVEL_HIGHEST);
 }
@@ -60,6 +63,8 @@ __irq_handler void board_io_irq_handler(void)
     size_t i;
     bool state_changed = false;
     bool new_state;
+
+    __DISABLE_IRQ;
 
     for (i = 0; i < ARRAY_SIZE(btn_map); ++i) {
         new_state = gpio_get(btn_map[i].gpio);
@@ -87,6 +92,8 @@ __irq_handler void board_io_irq_handler(void)
         proc_enqueue(board_io_usb_prewrite, &io_container,
                      PRIORITY_LEVEL_HIGHEST);
     }
+
+    __ENABLE_IRQ;
 }
 
 static void io_map_init(void)
@@ -118,20 +125,10 @@ static void isr_init(void)
 
     for (i = 0; i < io_container.btn_size; ++i) {
         gpio_set_irq_enabled(io_container.btn_map[i].gpio, events, true);
-        /*gpio_acknowledge_irq(io_container.io_map[i].gpio, events);
-        ien = irq_base->inte[io_container.io_map[i].gpio / 8];
-        events <<= 4 * (io_container.io_map[i].gpio % 8);
-
-        reg_set_bit(ien, events);*/
     }
 
     for (i = 0; i < io_container.dpad_size; ++i) {
         gpio_set_irq_enabled(io_container.dpad_map[i].gpio, events, true);
-        /*gpio_acknowledge_irq(io_container.io_map[i].gpio, events);
-        ien = irq_base->inte[io_container.io_map[i].gpio / 8];
-        events <<= 4 * (io_container.io_map[i].gpio % 8);
-
-        reg_set_bit(ien, events);*/
     }
     irq_set_exclusive_handler(IO_IRQ_BANK0, board_io_irq_handler);
     irq_set_enabled(IO_IRQ_BANK0, true);

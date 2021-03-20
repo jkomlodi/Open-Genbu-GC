@@ -1,3 +1,6 @@
+#ifndef BOARD_IO_H
+#define BOARD_IO_H
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -24,3 +27,5 @@ typedef struct {
 
 void *board_io_usb_prewrite(void *args);
 void board_io_init(void);
+
+#endif

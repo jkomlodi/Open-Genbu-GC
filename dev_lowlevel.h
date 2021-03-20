@@ -125,7 +125,7 @@ static const struct usb_endpoint_descriptor ep1_in = {
         .bEndpointAddress = EP1_IN_ADDR,
         .bmAttributes     = USB_TRANSFER_TYPE_INTERRUPT,
         .wMaxPacketSize   = 64,
-        .bInterval        = 5
+        .bInterval        = 1
 };
 
 static const struct usb_endpoint_descriptor ep2_out = {
@@ -134,7 +134,7 @@ static const struct usb_endpoint_descriptor ep2_out = {
         .bEndpointAddress = EP2_OUT_ADDR,
         .bmAttributes     = USB_TRANSFER_TYPE_INTERRUPT,
         .wMaxPacketSize   = 64,
-        .bInterval        = 5
+        .bInterval        = 1
 };
 
 static const struct usb_configuration_descriptor config_descriptor = {

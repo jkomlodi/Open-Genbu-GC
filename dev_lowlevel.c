@@ -54,6 +54,8 @@ size_t descr_expected;
 /* Different from configured in USB terminology */
 static bool hid_ready = false;
 
+bool ep1_in_busy = false;
+
 /* Callbacks for when the EP finishes transferring */
 void ep0_in_cb(uint8_t *buf, uint16_t len);
 void ep0_out_cb(uint8_t *buf, uint16_t len);
@@ -72,11 +74,11 @@ bool gamepad_held;
 /* TODO: Write a test that ensures this map matches the io_map mapping */
 /* Stolen from Genbu */
 const gamepad_btn io_btn_map[NUM_BTN] = {
-    { .indeces = {0},     .bits = {0x01}, .num = 1 }, /* RU */
-    { .indeces = {0},     .bits = {0x02}, .num = 1 }, /* RR */
-    { .indeces = {0},     .bits = {0x04}, .num = 1 }, /* RD */
-    { .indeces = {0},     .bits = {0x08}, .num = 1 }, /* RL */
-    { .indeces = {0},     .bits = {0x20}, .num = 1 }, /* RPRESS */
+    { .indeces = {0, 11}, .bits = {0x01, 0xff}, .num = 2 }, /* RU */
+    { .indeces = {0, 12}, .bits = {0x02, 0xff}, .num = 2 }, /* RR */
+    { .indeces = {0, 13}, .bits = {0x04, 0xff}, .num = 2 }, /* RD */
+    { .indeces = {0, 14}, .bits = {0x08, 0xff}, .num = 2 }, /* RL */
+    { .indeces = {0, 11}, .bits = {0x20, 0xff}, .num = 2 }, /* RPRESS */
     { .indeces = {0, 15}, .bits = {0x10, 0xff}, .num = 2 }, /* LPRESS */
     { .indeces = {1},     .bits = {0x01}, .num = 1 }  /* START */
 };
@@ -354,23 +356,6 @@ void usb_handle_device_descriptor(volatile struct usb_setup_packet *pkt)
     xfer_len = pkt->wLength <= sizeof(*dev_config.device_descriptor) ?
                                pkt->wLength :
                                sizeof(*dev_config.device_descriptor);
-
-    /*
-     * The host requested less length than the device descriptor size, we need
-     * to deal with handling state now for the next transfer.
-     *
-     * Windows and Linux don't do this, but the Switch requests 8-byte packets
-     * because either NVIDIA or Nintendo have to be a pain in the ass.
-     */
-    if (pkt->wLength + descr_sent < sizeof(*dev_config.device_descriptor)) {
-//        usb_xfer_state = XFER_STATE_DEVICE_DESCR;
-        descr_sent += pkt->wLength;
-        descr_expected = sizeof(*dev_config.device_descriptor);
-    } else {
-        /* Otherwise we're done, reset state */
-        usb_xfer_state = XFER_STATE_DONE;
-        descr_sent = 0;
-    }
 
     ep->next_pid = 1;
     usb_start_transfer(ep, d, xfer_len);
@@ -764,9 +749,6 @@ void usb_handle_xfer(USBXferState state)
     case XFER_STATE_HID_REPORT:
         usb_handle_report_descriptor_cont();
         break;
-    /*case XFER_STATE_DEVICE_DESCR:
-        usb_handle_device_descriptor_cont();
-        break;*/
     }
 }
 
@@ -817,6 +799,7 @@ void ep1_in_cb(uint8_t *buf, uint16_t len)
 {
     DB_PRINT_L(3, "gamepad_held=%d\n", gamepad_held);
 
+    ep1_in_busy = false;
     if (gamepad_held) {
         /*
          * This looks scary, but should be okay.
@@ -829,7 +812,7 @@ void ep1_in_cb(uint8_t *buf, uint16_t len)
          * a struct that has a longer lifetime.
          * It would have to be global, but that's ugly.
          */
-        proc_enqueue(send_gamepad, buf, PRIORITY_LEVEL_HIGHEST);
+//        proc_enqueue(send_gamepad, buf, PRIORITY_LEVEL_HIGHEST);
     }
 }
 
@@ -912,7 +895,7 @@ __prio_queue void *usb_gamepad_format_and_send(void *arg)
     io_map_container *ioc = (io_map_container *)arg;
     board_io *io = ioc->btn_map;
     bool all_high = true;
-
+    bool dpad_all_high;
     DB_PRINT_L(3, "Formatting buffer\n");
 
     memcpy(usb_buf, gamepad_template, ARRAY_SIZE(usb_buf));
@@ -922,9 +905,16 @@ __prio_queue void *usb_gamepad_format_and_send(void *arg)
             all_high = false;
         }
     }
-    all_high = !usb_dpad_map_to_buf(io_dpad_map, ioc, usb_buf);
+    dpad_all_high = !usb_dpad_map_to_buf(io_dpad_map, ioc, usb_buf);
 
+    if (!dpad_all_high || !all_high) {
+        all_high = false;
+    }
+
+    /* Make sure messages don't get gobbled, spin if needed */
+    while(ep1_in_busy);
     send_gamepad(usb_buf);
+    ep1_in_busy = true;
 
     /*
      * XXX: Maybe ugly?  I would need to revisit this.
