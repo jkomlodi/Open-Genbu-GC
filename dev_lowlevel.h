@@ -42,4 +42,6 @@ struct usb_device_configuration {
     struct usb_endpoint_configuration endpoints[USB_NUM_ENDPOINTS];
 };
 
+void usb_device_init(void);
+
 #endif

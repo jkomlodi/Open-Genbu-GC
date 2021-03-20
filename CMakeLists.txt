@@ -7,6 +7,7 @@ project(genbu-fw)
 pico_sdk_init()
 
 add_executable(genbu-fw
+    main.c
     dev_lowlevel.c
     proc_queue.c
     board_io.c
