@@ -3,7 +3,7 @@
 #include "pico/stdlib.h"
 
 #include "proc_queue.h"
-#include "dev_lowlevel.h"
+#include "usb_driver.h"
 #include "utils.h"
 #include "arm_utils.h"
 #include "board_io.h"

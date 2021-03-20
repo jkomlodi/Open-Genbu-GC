@@ -5,7 +5,7 @@
  */
 
 #ifndef DESCRIPTORS_H
-#define DESCRIPTORS_H_
+#define DESCRIPTORS_H
 
 #include <stdint.h>
 

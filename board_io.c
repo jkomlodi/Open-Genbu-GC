@@ -12,7 +12,7 @@
 #include "utils.h"
 #include "arm_utils.h"
 #include "io.h"
-#include "dev_lowlevel.h"
+#include "usb_gamepad.h"
 #include "board_io.h"
 #include "debounce.h"
 

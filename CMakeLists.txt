@@ -8,11 +8,12 @@ pico_sdk_init()
 
 add_executable(genbu-fw
     main.c
-    dev_lowlevel.c
     proc_queue.c
     board_io.c
     debounce.c
     descriptors.c
+    usb_gamepad.c
+    usb_driver.c
 )
 
 pico_enable_stdio_usb(genbu-fw 0)
