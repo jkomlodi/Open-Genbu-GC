@@ -7,7 +7,7 @@
 #include "hardware/irq.h"
 #include "hardware/sync.h"
 
-#include "prio_queue.h"
+#include "proc_queue.h"
 #include "pinmap.h"
 #include "utils.h"
 #include "arm_utils.h"

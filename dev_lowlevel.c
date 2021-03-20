@@ -14,7 +14,7 @@
 #include "io.h"
 #include "utils.h"
 #include "arm_utils.h"
-#include "prio_queue.h"
+#include "proc_queue.h"
 #include "board_io.h"
 #include "pinmap.h"
 

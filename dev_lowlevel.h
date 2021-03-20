@@ -9,7 +9,7 @@
 
 #include "usb_common.h"
 #include "utils.h"
-#include "prio_queue.h"
+#include "proc_queue.h"
 
 /* Struct in which we keep the endpoint configuration */
 typedef void (*usb_ep_handler)(uint8_t *buf, uint16_t len);

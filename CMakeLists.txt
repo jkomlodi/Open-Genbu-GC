@@ -8,7 +8,7 @@ pico_sdk_init()
 
 add_executable(genbu-fw
     dev_lowlevel.c
-    prio_queue.c
+    proc_queue.c
     board_io.c
     debounce.c
 )

@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "prio_queue.h"
+#include "proc_queue.h"
 #include "utils.h"
 
 /*
