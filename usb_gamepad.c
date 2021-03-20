@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "pico/stdlib.h"
 #include "usb_common.h"
@@ -12,6 +13,7 @@
 #include "pinmap.h"
 #include "descriptors.h"
 #include "usb_gamepad.h"
+#include "usb_driver.h"
 
 bool ep1_in_busy = false;
 

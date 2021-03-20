@@ -66,6 +66,7 @@ void ep0_out_cb(uint8_t *buf, uint16_t len);
 void usb_device_init(void);
 void usb_start_transfer(struct usb_endpoint_configuration *ep, uint8_t *buf,
                         uint16_t len);
+struct usb_endpoint_configuration *usb_get_endpoint_configuration(uint8_t addr);
 void usb_bus_reset(void);
 void ep0_in_cb(uint8_t *buf, uint16_t len);
 void ep0_out_cb(uint8_t *buf, uint16_t len);

@@ -12,7 +12,7 @@
 #include "usb_common.h"
 
 #define EP0_IN_ADDR EPX_IN_ADDR(0)
-#define EP0_OUT_ADDR EPX_IN_ADDR(0)
+#define EP0_OUT_ADDR EPX_OUT_ADDR(0)
 #define EP1_IN_ADDR EPX_IN_ADDR(1)
 #define EP2_OUT_ADDR EPX_OUT_ADDR(1)
 
