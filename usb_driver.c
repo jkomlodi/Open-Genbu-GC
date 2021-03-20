@@ -19,13 +19,13 @@
 #include "descriptors.h"
 #include "usb_driver.h"
 
-static USBXferState usb_xfer_state = XFER_STATE_DONE;
-
-/* XXX: HID report variables */
+/*
+ * For packets too large to fit in a single transfer, we need to keep track of
+ * how much we have transferred
+ */
 size_t descr_sent;
 size_t descr_expected;
-/* Different from configured in USB terminology */
-static bool hid_ready = false;
+USBXferState usb_xfer_state = XFER_STATE_DONE;
 
 /* Callbacks for when the EP finishes transferring */
 void ep0_in_cb(uint8_t *buf, uint16_t len);
@@ -468,7 +468,6 @@ static void usb_handle_report_descriptor_cont(void)
         descr_sent += xfer_len;
     } else {
         usb_xfer_state = XFER_STATE_DONE;
-        hid_ready = true;
     }
 }
 
@@ -553,7 +552,6 @@ static void usb_handle_setup_packet(void) {
         } else {
             DB_PRINT_L(1, "Other IN request (0x%x)\r\n", pkt->bRequest);
         }
-    /* XXX: HID IN setup request, not sure what to call this variable */
     } else if (req_direction == USB_DIR_EP_IN) {
         descriptor_type = pkt->wValue >> 8;
         switch (descriptor_type) {
