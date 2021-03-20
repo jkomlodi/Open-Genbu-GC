@@ -21,7 +21,7 @@ bool ep1_in_busy = false;
 bool gamepad_held;
 
 /* TODO: Write a test that ensures this map matches the io_map mapping */
-/* Stolen from Genbu */
+/* Values stolen from Genbu */
 const gamepad_btn io_btn_map[NUM_BTN] = {
     { .indeces = {0, 11}, .bits = {0x01, 0xff}, .num = 2 }, /* RU */
     { .indeces = {0, 12}, .bits = {0x02, 0xff}, .num = 2 }, /* RR */
@@ -81,6 +81,9 @@ void ep1_in_cb(uint8_t *buf, uint16_t len)
          * TODO: A more proper thing to do would to be contain buf and len in
          * a struct that has a longer lifetime.
          * It would have to be global, but that's ugly.
+         *
+         * XXX: Commented for now because the host (at least on the switch)
+         * sees the button as held until a "release" packet is sent.
          */
 //        proc_enqueue(send_gamepad, buf, PRIORITY_LEVEL_HIGHEST);
     }
@@ -148,7 +151,6 @@ static bool usb_dpad_map_to_buf(const gamepad_btn *usb_map,
     }
 
     /* Now add the d-pad input */
-    /* XXX: See above 8-case */
     if (press_cnt == 1) {
         usb_buf[btn->indeces[0]] = dpad_val == 0x08 ? 0 : dpad_val;
     } else if (press_cnt > 1) {
