@@ -29,6 +29,9 @@ int main(void) {
     proc_init();
     board_io_init();
 
+    /* Spin until USB is ready */
+    while(!usb_is_configured());
+
     control_loop();
 
     return 0;

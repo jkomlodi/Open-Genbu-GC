@@ -709,3 +709,8 @@ void ep0_out_cb(uint8_t *buf, uint16_t len)
 {
     ;
 }
+
+bool usb_is_configured(void)
+{
+    return configured;
+}
