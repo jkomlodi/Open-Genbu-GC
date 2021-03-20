@@ -10,6 +10,7 @@ add_executable(genbu-fw
     dev_lowlevel.c
     prio_queue.c
     board_io.c
+    debounce.c
 )
 
 pico_enable_stdio_usb(genbu-fw 0)
