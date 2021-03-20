@@ -11,6 +11,7 @@ add_executable(genbu-fw
     proc_queue.c
     board_io.c
     debounce.c
+    descriptors.c
 )
 
 pico_enable_stdio_usb(genbu-fw 0)

@@ -17,6 +17,7 @@
 #include "proc_queue.h"
 #include "board_io.h"
 #include "pinmap.h"
+#include "descriptors.h"
 
 #define usb_hw_set hw_set_alias(usb_hw)
 #define usb_hw_clear hw_clear_alias(usb_hw)
@@ -518,8 +519,8 @@ static void usb_handle_report_descriptor(volatile struct usb_setup_packet *pkt)
     /* Update global state so we know where we are */
     if (xfer_len == 64) {
         descr_sent = xfer_len;
-        descr_expected = pkt->wLength > ARRAY_SIZE(genbu_report_desc) ?
-                         ARRAY_SIZE(genbu_report_desc) : pkt->wLength;
+        descr_expected = pkt->wLength > ARRAY_SIZE(hid_report_descriptor) ?
+                         ARRAY_SIZE(hid_report_descriptor) : pkt->wLength;
         usb_xfer_state = XFER_STATE_HID_REPORT;
     } else {
         usb_xfer_state = XFER_STATE_DONE;

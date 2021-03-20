@@ -3,7 +3,7 @@
 
 #include <assert.h>
 
-#define ERR_DEBUG 0
+#define ERR_DEBUG 5
 
 /* To tell the user what's an IRQ handler */
 #define __irq_handler
