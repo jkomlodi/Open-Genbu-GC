@@ -25,4 +25,8 @@
     asm volatile ("cpsie i"); \
 } while (0)
 
+#define __SEV do {        \
+    asm volatile ("sev"); \
+} while (0)
+
 #endif
