@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 
 #include "proc_queue.h"
 #include "usb_driver.h"
@@ -8,6 +9,7 @@
 #include "utils.h"
 #include "arm_utils.h"
 #include "board_io.h"
+#include "ws2812.h"
 
 void control_loop(void)
 {
@@ -31,6 +33,12 @@ int main(void) {
     usb_device_init();
     proc_init();
     board_io_init();
+
+    /*
+     * In theory we could handle the WS2812s by using our priority queue, but
+     * we have an entire core sitting idle, so put it to work.
+     */
+    multicore_launch_core1(handle_ring_led);
 
     /* Spin until USB is ready */
     while(!usb_is_configured());
