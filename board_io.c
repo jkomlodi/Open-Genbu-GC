@@ -6,6 +6,7 @@
 #include "hardware/structs/iobank0.h"
 #include "hardware/irq.h"
 #include "hardware/sync.h"
+#include "pico/multicore.h"
 
 #include "proc_queue.h"
 #include "pinmap.h"
@@ -35,6 +36,7 @@ board_io dpad_map[NUM_DPAD] = {
 
 /* When passing maps around, we need to be aware of their size as well */
 io_map_container io_container = {
+    .type = TYPE_IOMC,
     .btn_map = btn_map,
     .btn_size = ARRAY_SIZE(btn_map),
     .dpad_map = dpad_map,
@@ -53,9 +55,60 @@ __prio_queue void *board_io_usb_prewrite(void *args)
     DB_PRINT_L(3, "\n");
 
     io_map_container *ioc = (io_map_container *)args;
-
+    update_leds(ioc);
     proc_enqueue(usb_gamepad_format_and_send, ioc,
                  PRIORITY_LEVEL_HIGHEST);
+}
+
+static inline void set_led_from_state(const board_io *btn, uint8_t led)
+{
+    gpio_put(led, btn->state);
+}
+
+void update_press_led(const io_map_container *ioc)
+{
+    size_t i;
+    const board_io *map = ioc->btn_map;
+
+    DBG_ASSERT(map[4].gpio == BOOSTER_R_PRESS);
+    DBG_ASSERT(map[5].gpio == BOOSTER_L_PRESS);
+    DBG_ASSERT(map[6].gpio == BTN_START);
+
+    set_led_from_state(&map[4], BOOSTER_R_LED_1);
+    set_led_from_state(&map[4], BOOSTER_R_LED_2);
+    set_led_from_state(&map[5], BOOSTER_L_LED_1);
+    set_led_from_state(&map[5], BOOSTER_L_LED_2);
+    set_led_from_state(&map[6], BTN_START_LED_1);
+    set_led_from_state(&map[6], BTN_START_LED_2);
+}
+
+/*
+ * Slides (or whatever they're called in GC), have LEDs controlled by WS2812s.
+ * These could be doing anything, ranging from breathing animations, to
+ * rainbow strobing, to only turning on based on what slides are triggered.
+ *
+ * Because of this, we don't do anything except hand it off to CPU1, which
+ * controls the WS2812s.
+ */
+void update_slide_led(const io_map_container *ioc)
+{
+    /*
+     * Hardware provides FIFOs for IPC, but they only take in uint32_t.
+     * Pass in the address of this and everything should be fine.
+     */
+    if (!multicore_fifo_push_timeout_us((uint32_t)ioc, 1000)) {
+        DB_PRINT_L(1, "Ring LED FIFO push missed!\n");
+    }
+    /*
+     * No need to SEV, the FIFO push does it for us.
+     * I don't agree with that design choice, but it is what it is.
+     */
+}
+
+const void update_leds(io_map_container *ioc)
+{
+    update_press_led(ioc);
+    update_slide_led(ioc);
 }
 
 __irq_handler void board_io_irq_handler(void)
@@ -100,6 +153,7 @@ static void io_map_init(void)
 {
     size_t i;
 
+    /* Buttons */
     for (i = 0; i < ARRAY_SIZE(btn_map); ++i) {
         gpio_set_input_enabled(btn_map[i].gpio, true);
         gpio_set_pulls(btn_map[i].gpio, true, false);
@@ -111,6 +165,22 @@ static void io_map_init(void)
         gpio_set_pulls(dpad_map[i].gpio, true, false);
         dpad_map[i].state = gpio_get(dpad_map[i].gpio);
     }
+
+    /* LEDs */
+    gpio_init(BOOSTER_R_LED_1);
+    gpio_init(BOOSTER_R_LED_2);
+    gpio_init(BOOSTER_L_LED_1);
+    gpio_init(BOOSTER_L_LED_2);
+    gpio_init(BTN_START_LED_1);
+    gpio_init(BTN_START_LED_2);
+    gpio_set_dir(BOOSTER_R_LED_1, GPIO_OUT);
+    gpio_set_dir(BOOSTER_R_LED_2, GPIO_OUT);
+    gpio_set_dir(BOOSTER_L_LED_1, GPIO_OUT);
+    gpio_set_dir(BOOSTER_L_LED_2, GPIO_OUT);
+    gpio_set_dir(BTN_START_LED_1, GPIO_OUT);
+    gpio_set_dir(BTN_START_LED_2, GPIO_OUT);
+    gpio_set_dir(BOOSTER_R_WS2812_DIN, true);
+    gpio_set_dir(BOOSTER_L_WS2812_DIN, true);
 }
 
 static void isr_init(void)

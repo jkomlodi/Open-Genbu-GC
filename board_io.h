@@ -7,6 +7,8 @@
 #define STATE_BUTTON_PRESSED 0
 #define STATE_BUTTON_RELEASED 1
 
+#define TYPE_IOMC 0xf33df00d
+
 typedef struct {
     uint8_t gpio;
     bool state;
@@ -14,6 +16,8 @@ typedef struct {
 } board_io;
 
 typedef struct {
+    /* For IPC, we want to safely cast to this type */
+    uint32_t type;
     /*
      * TODO: If we're clever about this, we can simplify some GPIO iterating
      * code by combining the button and d-pad maps and being able to iterate
@@ -27,5 +31,18 @@ typedef struct {
 
 void *board_io_usb_prewrite(void *args);
 void board_io_init(void);
+const void update_leds(io_map_container *ioc);
+void update_press_led(const io_map_container *ioc);
+void update_slide_led(const io_map_container *ioc);
+
+/*
+ * If the IO container is being passed around, instead of blindly casting to it,
+ * we'll try a cast and check if it's actually an IO map container.
+ */
+static inline io_map_container *ioc_safe_cast(void *arg)
+{
+    io_map_container *ioc = (io_map_container *)arg;
+    return ioc->type == TYPE_IOMC ? ioc : NULL;
+}
 
 #endif
