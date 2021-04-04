@@ -35,8 +35,22 @@
 #define DBG_ASSERT(x) do {                        \
     if (ERR_DEBUG > 1) {                          \
         assert(x);                                \
-    } else if(x) {                                \
+    } else if(!(x)) {                                \
         printf("%s: ASSERT REACHED\n", __func__); \
     }                                             \
 } while (0)
 #endif
+
+static inline void memset32(void *buf, uint32_t val, size_t words)
+{
+    /* Ensure alignment */
+    assert(!(((uint32_t)buf) & 3));
+
+    uint32_t *p = (uint32_t *)buf;
+    while (words) {
+        *p = val;
+        ++p;
+        --words;
+    }
+
+}
